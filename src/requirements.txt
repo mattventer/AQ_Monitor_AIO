@@ -1,0 +1,2 @@
+PyBluez==0.22
+adafruit-io==2.3.2
