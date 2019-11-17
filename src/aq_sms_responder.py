@@ -1,15 +1,14 @@
-#!/usr/bin/python3
 from Adafruit_IO import Client, Feed
-from flask import Flask, request
+from flask import Flask, Response, request
 from twilio import twiml
 from datetime import datetime
 import logging
 # On recieving a text, this pulls data from AIO and returns to sender
-logging.basicConfig(filename='src/aq_sms_responder.log',level=logging.INFO)
+logging.basicConfig(filename='aq_sms_responder.log',level=logging.INFO)
+
 app = Flask(__name__)
 
-@app.route('/sms', methods=['POST']) # url/sms 
-
+@app.route('/sms', methods=['GET','POST']) # url/sms 
 def sms():
 	logging.info('Recieved new sms')
 	number = request.form['From']
@@ -22,4 +21,4 @@ def sms():
 # Run the app
 if __name__ == '__main__':
 	logging.info('Starting sms server')
-	app.run()
+	app.run(debug=True)
