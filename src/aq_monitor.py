@@ -2,7 +2,8 @@
 import bluetooth
 from Adafruit_IO import Client, Feed
 from twilio import twiml
-from twilio.rest import Client as TwilioClient
+#from twilio.rest import Client as TwilioClient
+from twilio.rest import TwilioRestClient as TwilioClient
 from datetime import datetime
 import logging
 
