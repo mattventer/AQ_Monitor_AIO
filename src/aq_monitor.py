@@ -4,6 +4,9 @@ from Adafruit_IO import Client, Feed
 from twilio import twiml
 from twilio.rest import Client as TwilioClient
 from datetime import datetime
+import logging
+
+logging.basicConfig(filename='src/aq_monitor.log',level=logging.INFO)
 
 # AQ Monitor collects 15 second averages and posts them to AIO
 # Will send a text if any single reading (of the 15) is too high
@@ -44,10 +47,7 @@ tvoc_feed = None
 co_feed = None
 co2_feed = None
 
-print('Starting AQ Monitor...')
-
-
-
+logging.info('Starting AQ Monitor')
 
 try:
     with open(key_file) as f:
@@ -55,48 +55,33 @@ try:
         content = [x.strip() for x in content]
         f.close()
 except:
-    print("Could not load info from keys.txt.")
+    logging.error("Could not load info from keys.txt.")
 else:
 	try:
 		  twilio_num = content[0]
-	except:
-		  print('Error: Could not get Twilio phone number from keys.txt')
-	try:
 		  my_num = content[1]
-	except:
-		  print('Error: Could not get personal number from keys.txt')
-	try:
 		  TWIL_SID = content[2]
-	except:
-		  print('Error: Could not get Twilio SID from keys.txt')
-	try:
 		  TWIL_TOKEN = content[3]
-	except:
-		  print('Error: Could not get Twilio Token from keys.txt')
-	try:
 		  ADAFRUIT_IO_USERNAME = content[4]
-	except:
-		  print('Error: Could not get AIO username from keys.txt')
-	try:
 		  ADAFRUIT_IO_KEY = content[5]
 	except:
-		   print('Error: Could not get AIO key from keys.txt')
+		   logging.error('Error: Could not get keys from keys.txt')
 	else:
 		# Only run after loading keys
 		try:
 			twil_client = TwilioClient(TWIL_SID, TWIL_TOKEN)
 		except:
-			print('Could not start Twilio Client. Check keys')
+			logging.error('Could not start Twilio Client. Check keys\nExiting.')
 			exit()
 		else:
-			print('Twilio Client successfully created...')
+			logging.info('Twilio Client successfully created...')
 		try:
 			aio = Client(ADAFRUIT_IO_USERNAME, ADAFRUIT_IO_KEY)
 		except:
-			print('Could not start Adafruit IO Client. Check keys')
+			logging.error('Could not start Adafruit IO Client. Check keys\nExiting')
 			exit()
 		else:
-			print('AIO Client successfully created...')
+			logging.info('AIO Client successfully created...')
 			try:
 				temp_feed = aio.feeds('arduino-air-quality-monitor.temperature')
 				hum_feed = aio.feeds('arduino-air-quality-monitor.humidity')
@@ -106,10 +91,10 @@ else:
 				co_feed = aio.feeds('arduino-air-quality-monitor.co')
 				co2_feed = aio.feeds('arduino-air-quality-monitor.co2')
 			except:
-				print('Error loading AIO feeds')
+				logging.error('Error loading AIO feeds')
 				exit()
 			else:
-				print('Loaded AIO feeds successfully...')
+				logging.info('Loaded AIO feeds successfully...')
      
 
 ################################################################################
@@ -117,8 +102,11 @@ else:
 
 # Sends warning texts to personal number specified\
 def sendAlert(msg):
-	twil_client.messages.create(to=my_num,from_=twilio_num,
+	try:
+		twil_client.messages.create(to=my_num,from_=twilio_num,
 															body=msg)
+	except:
+		logging.error('Could not send sms. Check sendAlert')
 
 def checkReadings(temp, hum, tvoc, co, co2):
 	global alert_temp, alert_hum, alert_tvoc, alert_co, alert_co2
@@ -166,7 +154,7 @@ def post(data):
 		aio.send(co_feed.key, str(data[5]))
 		aio.send(co2_feed.key, str(data[6]))
 	except: #TODO send text if aio_error_sent is false, set true after
-		print("Error posting to AIO. Not parsing error. Probably trying "
+		logging.error("Failed to post to AIO. Not parsing error. Probably trying "
 						"again in a few seconds...")
 		sendAlert("Air Quality Alert:\nFailed to post to AIO.")
 	#else:
@@ -198,18 +186,22 @@ while 1:
 					if found_begin:
 						end_index = data.find(data_end)
 						if end_index != -1: # Found new data set
-							data = data[:end_index]
-							data = data.split(',')
-							temp_t += float(data[0])
-							hum_t += float(data[1])
-							pm10_t += float(data[2])
-							pm25_t += float(data[3])
-							tvoc_t += float(data[4])
-							co_t += float(data[5])
-							co2_t += float(data[6])
-							data = ''
-							i += 1
-							found_begin = False
+							try:
+								data = data[:end_index]
+								data = data.split(',')
+							except:
+								logging.warning('Failed to parse incoming data')
+							else:
+								temp_t += float(data[0])
+								hum_t += float(data[1])
+								pm10_t += float(data[2])
+								pm25_t += float(data[3])
+								tvoc_t += float(data[4])
+								co_t += float(data[5])
+								co2_t += float(data[6])
+								data = ''
+								i += 1
+								found_begin = False
 						if i == 14:
 							data_to_post.append(round((float(temp_t)/i), 3))
 							data_to_post.append(round((float(hum_t)/i), 3))
@@ -237,7 +229,7 @@ while 1:
 			pass
 	
 		except KeyboardInterrupt:
-			print('\nClosing connection...')
+			logging.info('\nClosing connection...')
 			socket.close()
-			print('Done.')
+			logging.info('Done.')
 			break
