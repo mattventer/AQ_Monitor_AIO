@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 from Adafruit_IO import Client, Feed
 from flask import Flask, Response, request
-from twilio import twiml
-from twilio.rest import TwilioRestClient as TwilioClient
+from twilio.twiml.messaging_response import Message, MessagingResponse
+from twilio.rest import Client as TwilioClient
 from datetime import datetime
 import logging
 # On recieving a text, this pulls data from AIO and returns to sender
@@ -126,7 +126,7 @@ def sms():
 		msg = 'Warning: Unknown number.'
 		return
 	else: # response based on incoming request
-		resp = twiml.Response() # create msg to be returned
+		resp = MessagingResponse() # create msg to be returned
 		if new_request == 'commands':
 			msg = 'AQ Commands\n-all: current feed values\n-temp/hum etc: specific value'
 		elif new_request == 'all':

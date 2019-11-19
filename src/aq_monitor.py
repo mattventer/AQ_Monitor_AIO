@@ -1,9 +1,7 @@
 #!/usr/bin/python3
 import bluetooth
 from Adafruit_IO import Client, Feed
-from twilio import twiml
-#from twilio.rest import Client as TwilioClient
-from twilio.rest import TwilioRestClient as TwilioClient
+from twilio.rest import Client as TwilioClient
 from datetime import datetime
 import logging
 
@@ -59,14 +57,14 @@ except:
     logging.error("Could not load info from keys.txt.")
 else:
 	try:
-		  twilio_num = content[0]
-		  my_num = content[1]
-		  TWIL_SID = content[2]
-		  TWIL_TOKEN = content[3]
-		  ADAFRUIT_IO_USERNAME = content[4]
-		  ADAFRUIT_IO_KEY = content[5]
+		twilio_num = content[0]
+		my_num = content[1]
+		TWIL_SID = content[2]
+		TWIL_TOKEN = content[3]
+		ADAFRUIT_IO_USERNAME = content[4]
+		ADAFRUIT_IO_KEY = content[5]
 	except:
-		   logging.error('Error: Could not get keys from keys.txt')
+		logging.error('Error: Could not get keys from keys.txt')
 	else:
 		# Only run after loading keys
 		try:
@@ -96,7 +94,7 @@ else:
 				exit()
 			else:
 				logging.info('Loaded AIO feeds successfully...')
-     
+
 
 ################################################################################
 # Helper Functions
