@@ -1,5 +1,5 @@
 #!/bin/bash
-rm src/aq_monitor.log src/aq_sms_responder.log
+
 NOW=$(date +"%m-%d-%Y_%r")
 echo "New session: $NOW" >> src/aq_monitor.log 
 echo "New session: $NOW" >> src/aq_sms_responder.log

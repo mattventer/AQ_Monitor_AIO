@@ -6,7 +6,8 @@ from twilio.rest import Client as TwilioClient
 from datetime import datetime
 import logging
 # On recieving a text, this pulls data from AIO and returns to sender
-logging.basicConfig(filename='src/aq_sms_responder.log',level=logging.INFO)
+logging.basicConfig(filename='src/aq_sms_responder.log',level=logging.INFO,
+                    format = '%(asctime)s %(levelname)-8s %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
 twilio_num = None
 my_num = None
 TWIL_SID = None
@@ -75,6 +76,28 @@ else:
 ###############################################################################
 # Functions to be used within sms()
 # returns a list of current feed values
+
+def translateToFeedname(feed):
+	feedname = None
+	if feed == 'temp':
+		feedname = 'arduino-air-quality-monitor.temperature'
+	elif feed == 'hum':
+		feedname = 'arduino-air-quality-monitor.humidity'
+	elif feed == 'pm10':
+		feedname = 'arduino-air-quality-monitor.pm10'
+	elif feed == 'pm25':
+		feedname = 'arduino-air-quality-monitor.pm25'
+	elif feed == 'tvoc':
+		feedname = 'arduino-air-quality-monitor.tvoc'
+	elif feed == 'co':
+		feedname = 'arduino-air-quality-monitor.co'
+	elif feed == 'co2':
+		feedname = 'arduino-air-quality-monitor.co2'
+	else:
+		feedname = -1
+	return feedname
+
+
 def getAllFeedsCurrent():
 	retdata = []
 	response = 'Current values:\n'
@@ -93,23 +116,58 @@ def getAllFeedsCurrent():
 
 def getSpecificFeedCurrent(feedname):
 	retval = None
-	if feedname == 'temp':
-		retval = aio.receive('arduino-air-quality-monitor.temperature').value
-	elif feedname == 'hum':
-		retval = aio.receive('arduino-air-quality-monitor.humidity').value
-	elif feedname == 'pm10':
-		retval = aio.receive('arduino-air-quality-monitor.pm10').value
-	elif feedname == 'pm25':
-		retval = aio.receive('arduino-air-quality-monitor.pm25').value
-	elif feedname == 'tvoc':
-		retval = aio.receive('arduino-air-quality-monitor.tvoc').value
-	elif feedname == 'co':
-		retval = aio.receive('arduino-air-quality-monitor.co').value
-	elif feedname == 'co2':
-		retval = aio.receive('arduino-air-quality-monitor.co2').value
+	feed = translateToFeedname(feedname)
+	if feed != -1:
+		retval = aio.receive(feed).value
 	else:
 		retval = f'Could not retrieve {feedname} from AIO...'
 	return retval
+
+def getEntireFeed(feedname):
+	feed = translateToFeedname(feedname)
+	if feed != -1:
+		data = aio.data(feed)
+	else:
+		data = -1
+	total = 0
+	count = 0
+	for stuff in data:
+		total += float(stuff.value)
+		count += 1
+	return total/count
+
+def getSomeFeed(feedname, weeks):
+	feed = translateToFeedname(feedname)
+	# week
+	if weeks == 1:
+		div = 4
+	# 2 weeks
+	elif weeks == 2:
+		div = 2
+	# 3 weeks
+	elif weeks == 3:
+		div = (4/3)
+	# month
+	elif weeks == 4:
+		div = 1
+	# day
+	elif weeks == 24:
+		div = 30
+	else:
+		div = 10000
+	if feed != -1:
+		data = aio.data(feed)
+	else:
+		data = -1
+	total = 0
+	count = 0
+	data_count = (len(data)/div)
+	for stuff in data:
+		if count == data_count:
+			return total/count
+		total += float(stuff.value)
+		count += 1
+	return total/count
 
 
 ###############################################################################
@@ -117,10 +175,10 @@ app = Flask(__name__)
 
 @app.route('/sms', methods=['GET','POST']) # url/sms 
 def sms():
-	logging.info('Recieved new sms')
 	number = request.form['From']
 	msg_body = request.form['Body']
 	new_request = msg_body.lower().strip()
+	logging.info(f'New Request: {new_request}')
 	# Only respond to my number
 	if number != my_num:
 		msg = 'Warning: Unknown number.'
@@ -128,9 +186,42 @@ def sms():
 	else: # response based on incoming request
 		resp = MessagingResponse() # create msg to be returned
 		if new_request == 'commands':
-			msg = 'AQ Commands\n-all: current feed values\n-temp/hum etc: specific value'
+			msg = ('AQ Commands:\n\n-all: current feed values\n\n-temp/hum etc: specific value\n'
+			'\n-month + feed: month average\n\n-week + feed: week average\n'
+			'\n-2 week + feed: 2 week feed average\n\n-day + feed: day average\n'
+			'\n-avg + feed: all feed averages\n'
+			'\n-feeds: list available feeds')
+		elif new_request == 'feeds':
+			all_feeds = 'Available Feeds:\n\n'
+			for feed in feeds:
+				all_feeds += f'-{feed}\n'
+			msg = all_feeds
 		elif new_request == 'all':
 			msg = getAllFeedsCurrent()
+		elif new_request.startswith('month'):
+			rqst = new_request[6:] # remove month to find feed
+			#logging.info(f'Request after strip: {rqst}')
+			if rqst in feeds:
+				msg = str(round(getSomeFeed(rqst, 4), 2))
+				#logging.info(f'getSomeFeed() returned: {msg}')
+			else:
+				msg = f'Couldnt find feed: {rqst}'
+		elif new_request.startswith('week'):
+			rqst = new_request[5:]
+			msg = str(round(getSomeFeed(rqst, 1), 2))
+		elif new_request.startswith('2 week'):
+			rqst = new_request[7:]
+			msg = str(round(getSomeFeed(rqst, 2), 2))
+		elif new_request.startswith('day'):
+			rqst = new_request[4:]
+			msg = str(round(getSomeFeed(rqst, 24), 2))
+		elif new_request.startswith('avg'):
+			rqst = new_request[4:]
+			day_avg = str(round(getSomeFeed(rqst, 24), 2))
+			week_avg = str(round(getSomeFeed(rqst, 1), 2))
+			two_week_avg = str(round(getSomeFeed(rqst, 2), 2))
+			month_avg = str(round(getSomeFeed(rqst, 4), 2))
+			msg = f'{rqst} averages:\n\nDay: {day_avg}\nWeek: {week_avg}\n2 Week: {two_week_avg}\nMonth: {month_avg}'
 		elif new_request in feeds:
 			#return
 			msg = getSpecificFeedCurrent(new_request)

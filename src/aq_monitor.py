@@ -5,7 +5,8 @@ from twilio.rest import Client as TwilioClient
 from datetime import datetime
 import logging
 
-logging.basicConfig(filename='src/aq_monitor.log',level=logging.INFO)
+logging.basicConfig(filename='src/aq_monitor.log',level=logging.INFO,
+                    format = '%(asctime)s %(levelname)-8s %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
 
 # AQ Monitor collects 15 second averages and posts them to AIO
 # Will send a text if any single reading (of the 15) is too high
@@ -31,12 +32,11 @@ my_num = None
 TWIL_SID = None
 TWIL_TOKEN = None
 alert_temp = alert_hum = alert_tvoc = alert_co = alert_co2 = False
-#TwilioClient(TWIL_SID, TWIL_TOKEN)
+postsFailed = 0
 key_file = 'src/keys.txt'
 # Adafruit IO
 ADAFRUIT_IO_USERNAME = None
 ADAFRUIT_IO_KEY = None 
-#Client(ADAFRUIT_IO_USERNAME, ADAFRUIT_IO_KEY)
 # My feeds
 temp_feed = None
 hum_feed = None
@@ -102,8 +102,7 @@ else:
 # Sends warning texts to personal number specified\
 def sendAlert(msg):
 	try:
-		twil_client.messages.create(to=my_num,from_=twilio_num,
-															body=msg)
+		twil_client.messages.create(to=my_num,from_=twilio_num, body=msg)
 	except:
 		logging.error('Could not send sms. Check sendAlert')
 
@@ -143,6 +142,7 @@ def checkReadings(temp, hum, tvoc, co, co2):
 # Recieves byte-string from Bluetooth socket
 # Parses the data and sends to AIO feeds
 def post(data):
+	global postsFailed
 # Send
 	try:
 		aio.send(temp_feed.key, str(data[0]))
@@ -153,11 +153,15 @@ def post(data):
 		aio.send(co_feed.key, str(data[5]))
 		aio.send(co2_feed.key, str(data[6]))
 	except: #TODO send text if aio_error_sent is false, set true after
+		postsFailed += 1
 		logging.error("Failed to post to AIO. Not parsing error. Probably trying "
-						"again in a few seconds...")
-		sendAlert("Air Quality Alert:\nFailed to post to AIO.")
-	#else:
-		#print('success')
+						f"again in a few seconds. Error Num: {postsFailed}")
+		if postsFailed == 1 or postsFailed == 10 or postsFailed == 100:
+			sendAlert(f"Air Quality Alert:\nFailed to post to AIO.\n{postsFailed} consecutive fails.")
+	else:
+		if postsFailed > 0:
+			sendAlert(f'AQ back online after {postsFailed} failed attempts')
+		postsFailed = 0
 
 ################################################################################
 # Take 15 loop average, then post
